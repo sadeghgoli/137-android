@@ -8,6 +8,10 @@
     "userInterfaceStyle": "light",
     "scheme": "sabzevar137",
     "extra": {
+      "router": {
+        "origin": "https://test-137.sabzevar.ir",
+        "headOrigin": "https://test-137.sabzevar.ir"
+      },
       "supportsRTL": true,
       "apiBaseUrl": "https://apiweb-137request.sabzevar.ir",
       "ssoWebUrl": "https://auth.sabzevar.ir",
