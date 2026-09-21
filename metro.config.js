@@ -15,61 +15,8 @@ const SSO_UPSTREAM_BASE = (
   'https://apiweb-loginsso.sabzevar.ir'
 ).replace(/\/$/, '');
 
-const SSO_WEB_PUBLIC =
-  (appJson.expo?.extra?.ssoWebUrl || 'https://auth.sabzevar.ir').replace(/\/$/, '');
-
-/** Metro/Node only: LAN URL of mvc-web-sso (Kestrel :5002). Public auth URL often times out from datacenter. */
-const SSO_OTP_UPSTREAM_BASE = (
-  process.env.SSO_WEB_UPSTREAM ||
-  appJson.expo?.extra?.ssoWebUpstream ||
-  ''
-)
-  .trim()
-  .replace(/\/$/, '');
-
-const SSO_OTP_UPSTREAM_HOST_HEADER = (
-  process.env.SSO_WEB_UPSTREAM_HOST ||
-  appJson.expo?.extra?.ssoWebUpstreamHost ||
-  ''
-).trim();
-
-const SSO_CITIZEN_OTP_PATH_RAW =
-  appJson.expo?.extra?.ssoCitizenOtpPath || '/api/citizen/send-login-otp';
-const SSO_CITIZEN_OTP_PATH = SSO_CITIZEN_OTP_PATH_RAW.startsWith('/')
-  ? SSO_CITIZEN_OTP_PATH_RAW
-  : `/${SSO_CITIZEN_OTP_PATH_RAW}`;
-
-const SSO_PORTAL_WEB_PROXY_PREFIX = (
-  appJson.expo?.extra?.ssoPortalWebProxyPrefix || '/sso-portal-api'
-).replace(/\/$/, '');
-
-function resolveOtpUpstreamBase() {
-  if (SSO_OTP_UPSTREAM_BASE) {
-    return SSO_OTP_UPSTREAM_BASE;
-  }
-  console.warn(
-    '[sso-proxy] SSO_WEB_UPSTREAM / extra.ssoWebUpstream not set — OTP proxy uses public URL (may timeout on server)',
-  );
-  return SSO_WEB_PUBLIC;
-}
-
-function resolveOtpUpstreamHostHeader(upstreamBase) {
-  if (SSO_OTP_UPSTREAM_HOST_HEADER) {
-    return SSO_OTP_UPSTREAM_HOST_HEADER;
-  }
-  try {
-    return new URL(
-      upstreamBase.startsWith('http') ? upstreamBase : `http://${upstreamBase}`,
-    ).hostname;
-  } catch {
-    return 'auth.sabzevar.ir';
-  }
-}
-
-const otpUpstreamBaseForLog = resolveOtpUpstreamBase();
-console.log(`[sso-proxy] login API ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`);
 console.log(
-  `[sso-proxy] portal OTP ${otpUpstreamBaseForLog}${SSO_CITIZEN_OTP_PATH} (web prefix ${SSO_PORTAL_WEB_PROXY_PREFIX}, Host: ${resolveOtpUpstreamHostHeader(otpUpstreamBaseForLog)})`,
+  `[sso-proxy] /sso-api/* → ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`,
 );
 
 function ssoCorsHeaders(req) {
@@ -103,6 +50,7 @@ function handleSsoApiProxy(req, res) {
   const forwardHeaders = {
     Accept: req.headers.accept || 'application/json',
     'User-Agent': 'Sabzevar137-SsoProxy/1.0',
+    Host: upstreamUrl.hostname,
   };
   if (req.headers['content-type']) {
     forwardHeaders['Content-Type'] = req.headers['content-type'];
@@ -131,6 +79,7 @@ function handleSsoApiProxy(req, res) {
       method: req.method,
       headers: forwardHeaders,
       timeout: SSO_PROXY_TIMEOUT_MS,
+      servername: upstreamUrl.hostname,
     };
     if (body.length > 0) {
       forwardHeaders['Content-Length'] = String(body.length);
@@ -167,119 +116,6 @@ function handleSsoApiProxy(req, res) {
     }
     upstream.end();
   });
-}
-
-function forwardToUpstream(req, res, upstreamUrl, cors, timeoutMs, hostHeader) {
-  const forwardHeaders = {
-    Accept: req.headers.accept || 'application/json',
-    'User-Agent': 'Sabzevar137-SsoProxy/1.0',
-  };
-  if (hostHeader) {
-    forwardHeaders.Host = hostHeader;
-  }
-  if (req.headers['content-type']) {
-    forwardHeaders['Content-Type'] = req.headers['content-type'];
-  }
-
-  const chunks = [];
-  req.on('data', (chunk) => chunks.push(chunk));
-  req.on('error', () => {
-    if (!res.headersSent) {
-      res.writeHead(400, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Bad request body');
-    }
-  });
-  req.on('end', () => {
-    const body = Buffer.concat(chunks);
-    const transport = upstreamUrl.protocol === 'http:' ? http : https;
-    const requestOpts = {
-      protocol: upstreamUrl.protocol,
-      hostname: upstreamUrl.hostname,
-      port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),
-      path: upstreamUrl.pathname + upstreamUrl.search,
-      method: req.method,
-      headers: forwardHeaders,
-      timeout: timeoutMs,
-    };
-    if (body.length > 0) {
-      forwardHeaders['Content-Length'] = String(body.length);
-    }
-
-    const upstream = transport.request(requestOpts, (upRes) => {
-      const outHeaders = { ...cors };
-      if (upRes.headers['content-type']) {
-        outHeaders['Content-Type'] = upRes.headers['content-type'];
-      }
-      res.writeHead(upRes.statusCode || 502, outHeaders);
-      upRes.pipe(res);
-    });
-
-    upstream.on('timeout', () => {
-      upstream.destroy();
-      if (!res.headersSent) {
-        res.writeHead(504, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end(`Upstream timeout after ${timeoutMs}ms`);
-      }
-    });
-
-    upstream.on('error', (error) => {
-      if (!res.headersSent) {
-        res.writeHead(502, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end(`Upstream error: ${error.message}`);
-      }
-    });
-
-    if (body.length > 0) {
-      upstream.write(body);
-    }
-    upstream.end();
-  });
-}
-
-function handleSsoPortalProxy(req, res) {
-  const cors = ssoCorsHeaders(req);
-
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, cors);
-    res.end();
-    return;
-  }
-
-  const rawUrl = req.url || '';
-  const parsed = new URL(rawUrl, 'http://localhost');
-  const upstreamPath =
-    parsed.pathname.replace(new RegExp(`^${SSO_PORTAL_WEB_PROXY_PREFIX}(?=\\/|$)`), '') +
-    parsed.search;
-
-  if (!upstreamPath || upstreamPath === '/') {
-    res.writeHead(404, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Unknown portal API path');
-    return;
-  }
-
-  const upstreamBase = resolveOtpUpstreamBase();
-  const upstreamUrl = new URL(upstreamPath, `${upstreamBase}/`);
-  const hostHeader = resolveOtpUpstreamHostHeader(upstreamBase);
-  forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS, hostHeader);
-}
-
-/** @deprecated alias — same as portal proxy with fixed citizen path */
-function handleSsoOtpSend(req, res) {
-  const cors = ssoCorsHeaders(req);
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, cors);
-    res.end();
-    return;
-  }
-  if (req.method !== 'POST') {
-    res.writeHead(405, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Method Not Allowed');
-    return;
-  }
-  const upstreamBase = resolveOtpUpstreamBase();
-  const upstreamUrl = new URL(SSO_CITIZEN_OTP_PATH, `${upstreamBase}/`);
-  const hostHeader = resolveOtpUpstreamHostHeader(upstreamBase);
-  forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS, hostHeader);
 }
 
 /**
@@ -374,16 +210,6 @@ config.server = {
     return (req, res, next) => {
       try {
         const rawUrl = req.url || '';
-
-        if (rawUrl.startsWith(SSO_PORTAL_WEB_PROXY_PREFIX)) {
-          handleSsoPortalProxy(req, res);
-          return;
-        }
-
-        if (rawUrl.startsWith('/sso-otp-send')) {
-          handleSsoOtpSend(req, res);
-          return;
-        }
 
         if (rawUrl.startsWith('/sso-api')) {
           handleSsoApiProxy(req, res);

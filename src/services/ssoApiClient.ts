@@ -1,4 +1,4 @@
-import { SSO_CALLBACK_URL } from '../constants/apiConfig';
+import { SSO_API_URL, SSO_CALLBACK_URL } from '../constants/apiConfig';
 import {
   assertOtpCooldownAllowsSend,
   markOtpSent,
@@ -60,6 +60,8 @@ async function parseEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   }
 }
 
+const SSO_FETCH_TIMEOUT_MS = 45_000;
+
 async function ssoFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -76,11 +78,26 @@ async function ssoFetch<T>(
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SSO_FETCH_TIMEOUT_MS);
+
   let response: Response;
   try {
-    response = await fetch(`${SSO_API_URL}${path}`, { ...init, headers });
-  } catch {
+    response = await fetch(`${SSO_API_URL}${path}`, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new SsoApiError(
+        0,
+        'زمان درخواست تمام شد. اتصال به apiweb-loginsso برقرار نشد.',
+      );
+    }
     throw new SsoApiError(0, 'خطا در ارتباط با سرویس احراز هویت');
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const envelope = await parseEnvelope<T>(response);

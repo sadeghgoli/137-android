@@ -52,18 +52,6 @@ location /sso-api/ {
     proxy_ssl_server_name on;
 }
 
-# فقط برای dev لوکال (localhost) — روی test-137 مستقیم auth.sabzevar.ir + CORS
-location = /sso-otp-send {
-    proxy_pass https://auth.sabzevar.ir/api/citizen/send-login-otp;
-    proxy_http_version 1.1;
-    proxy_set_header Host auth.sabzevar.ir;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_ssl_server_name on;
-    proxy_read_timeout 70s;
-}
-
 location / {
     proxy_pass http://127.0.0.1:5037;
     proxy_http_version 1.1;
@@ -75,13 +63,7 @@ location / {
 }
 ```
 
-در حالت dev، Metro خودش `/sso-api` و `/sso-otp-send` را proxy می‌کند (`metro.config.js`).
-
-**الزامی برای ارسال OTP روی test-137:** nginx باید `location = /sso-otp-send` را **قبل از** `location /` به `auth.sabzevar.ir` فوروارد کند — وگرنه درخواست به Metro می‌رود و گیر می‌کند یا CORS خطا می‌دهد. نمونه کامل: `deploy/nginx-test-137.conf.example`
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
+Metro فقط `/sso-api/* → apiweb-loginsso` را proxy می‌کند. بعد از `git pull`: `npm run web:server -- --clear`. لاگ درست: `[sso-proxy] /sso-api/* → https://apiweb-loginsso.sabzevar.ir`.
 
 ---
 
