@@ -182,7 +182,7 @@ export async function sendOtp(
   phoneNumber: string,
   melliCode: string,
   phoneId?: number,
-): Promise<{ code?: string; message?: string }> {
+): Promise<{ message?: string }> {
   const otpCode = generateOtpCode();
   const payload: Record<string, string | number> = {
     phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
@@ -195,19 +195,16 @@ export async function sendOtp(
     payload.id = phoneId;
   }
 
-  const envelope = await ssoFetch<{
-    code?: string;
-    otpCode?: string;
-    message?: string;
-  }>('/api/auth/second-login/send-otp', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  const envelope = await ssoFetch<{ message?: string }>(
+    '/api/auth/second-login/send-otp',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 
-  const data = envelope.data;
   return {
-    code: data?.code ?? data?.otpCode ?? otpCode,
-    message: data?.message ?? 'کد تایید ارسال شد',
+    message: envelope.data?.message ?? envelope.message ?? 'کد تایید ارسال شد',
   };
 }
 

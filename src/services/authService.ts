@@ -79,7 +79,7 @@ export async function requestOtp(
   phoneNumber: string,
   melliCode: string,
   phoneId?: number,
-): Promise<{ code?: string }> {
+): Promise<{ message?: string }> {
   return sendOtp(phoneNumber, melliCode, phoneId);
 }
 

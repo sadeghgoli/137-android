@@ -7,6 +7,7 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const config = getDefaultConfig(__dirname);
 const appJson = require('./app.json');
+const { loadSmsConfig } = require('./server/loadSmsConfig');
 
 const UPSTREAM_TIMEOUT_MS = 120000;
 const SSO_PROXY_TIMEOUT_MS = 60000;
@@ -17,6 +18,81 @@ const SSO_UPSTREAM_BASE = (
 ).replace(/\/$/, '');
 
 console.log(`[sso-proxy] upstream ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`);
+
+const smsConfig = loadSmsConfig();
+const SMS_SEND_URL = smsConfig.sendUrl;
+const SMS_TOKEN = smsConfig.token;
+const SMS_HOST_HEADER = smsConfig.hostHeader;
+
+console.log(
+  `[sso-proxy] SMS ${SMS_SEND_URL} (Host: ${SMS_HOST_HEADER}, token: ${
+    SMS_TOKEN ? 'set' : 'missing'
+  })`,
+);
+
+function stripOtpFromSsoResponse(rawText) {
+  try {
+    const json = JSON.parse(rawText);
+    if (json && typeof json === 'object' && json.data && typeof json.data === 'object') {
+      delete json.data.code;
+      delete json.data.otpCode;
+      delete json.data.verificationCode;
+    }
+    delete json.code;
+    delete json.otpCode;
+    return JSON.stringify(json);
+  } catch {
+    return rawText;
+  }
+}
+
+function sendErpSms(phoneNumber, otpCode, smsBody) {
+  if (!SMS_TOKEN) {
+    console.warn('[sso-proxy] SMS_TOKEN not set — skipping ERP SMS');
+    return;
+  }
+  const num = String(phoneNumber || '').replace(/\D/g, '');
+  const code = String(otpCode || '').replace(/\D/g, '');
+  if (!num || code.length !== 5) {
+    console.warn('[sso-proxy] invalid phone/otp for SMS');
+    return;
+  }
+  const body =
+    smsBody ||
+    `کد ورود : ${code}\nمدیریت فناوری اطلاعات شهرداری سبزوار`;
+  const url =
+    `${SMS_SEND_URL.replace(/\/$/, '')}?` +
+    `Token=${encodeURIComponent(SMS_TOKEN)}` +
+    `&Num=${encodeURIComponent(num)}` +
+    `&Body=${encodeURIComponent(body)}`;
+
+  const parsed = new URL(url);
+  const transport = parsed.protocol === 'http:' ? http : https;
+  const reqOpts = {
+    protocol: parsed.protocol,
+    hostname: parsed.hostname,
+    port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
+    path: parsed.pathname + parsed.search,
+    method: 'GET',
+    headers: { Host: SMS_HOST_HEADER, 'User-Agent': 'Sabzevar137-SsoProxy/1.0' },
+    timeout: 15000,
+  };
+
+  const smsReq = transport.request(reqOpts, (smsRes) => {
+    smsRes.on('data', () => {});
+    smsRes.on('end', () => {
+      console.log(`[sso-proxy] ERP SMS status ${smsRes.statusCode} for ***${num.slice(-4)}`);
+    });
+  });
+  smsReq.on('error', (err) => {
+    console.warn(`[sso-proxy] ERP SMS failed: ${err.message}`);
+  });
+  smsReq.on('timeout', () => {
+    smsReq.destroy();
+    console.warn('[sso-proxy] ERP SMS timeout');
+  });
+  smsReq.end();
+}
 
 function ssoCorsHeaders(req) {
   const origin = req.headers.origin || '*';
@@ -67,6 +143,16 @@ function handleSsoApiProxy(req, res) {
   });
   req.on('end', () => {
     const body = Buffer.concat(chunks);
+    const isSendOtp = upstreamPath.includes('/send-otp');
+    let sendOtpPayload = null;
+    if (isSendOtp && body.length > 0) {
+      try {
+        sendOtpPayload = JSON.parse(body.toString('utf8'));
+      } catch {
+        sendOtpPayload = null;
+      }
+    }
+
     const transport = upstreamUrl.protocol === 'http:' ? http : https;
     const requestOpts = {
       protocol: upstreamUrl.protocol,
@@ -86,7 +172,29 @@ function handleSsoApiProxy(req, res) {
       if (upRes.headers['content-type']) {
         outHeaders['Content-Type'] = upRes.headers['content-type'];
       }
-      res.writeHead(upRes.statusCode || 502, outHeaders);
+
+      const status = upRes.statusCode || 502;
+      if (isSendOtp) {
+        const responseChunks = [];
+        upRes.on('data', (chunk) => responseChunks.push(chunk));
+        upRes.on('end', () => {
+          const raw = Buffer.concat(responseChunks).toString('utf8');
+          if (status >= 200 && status < 300 && sendOtpPayload) {
+            sendErpSms(
+              sendOtpPayload.phoneNumber,
+              sendOtpPayload.otpCode,
+              sendOtpPayload.smsBody,
+            );
+          }
+          const safeBody = stripOtpFromSsoResponse(raw);
+          outHeaders['Content-Type'] = 'application/json; charset=utf-8';
+          res.writeHead(status, outHeaders);
+          res.end(safeBody);
+        });
+        return;
+      }
+
+      res.writeHead(status, outHeaders);
       upRes.pipe(res);
     });
 

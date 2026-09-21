@@ -75,3 +75,28 @@ npx expo export --platform web
 ```
 
 جزئیات بیشتر: همان فایل در repo یا بخش‌های systemd/background در نسخه کامل.
+
+---
+
+## SMS OTP (وب test-137)
+
+کد OTP در UI پر **نمی‌شود**. بعد از `send-otp`، Metro از سرور ERP SMS می‌زند.
+
+تنظیمات در **`server/sms.config.json`** (فقط Metro/Node می‌خواند — داخل APK نمی‌رود):
+
+```json
+{
+  "sendUrl": "http://192.168.1.30/SubSystems/SMS/webservices/sms_send.aspx",
+  "token": "...",
+  "hostHeader": "erp.sabzevar.ir"
+}
+```
+
+اختیاری: `server/sms.config.local.json` (gitignore) یا env برای override.
+
+```bash
+git pull
+npm run web:server
+```
+
+لاگ: `[sso-proxy] SMS ... (token: set)`

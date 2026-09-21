@@ -55,7 +55,6 @@ export function SelectPhoneScreen({ navigation, route }: Props) {
       navigation.navigate('VerifyOtp', {
         melliCode,
         phoneNumber: selectedPhone.phoneNumber,
-        demoCode: result.code,
       });
     } catch (err) {
       const message =

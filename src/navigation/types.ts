@@ -15,7 +15,6 @@ export type RootStackParamList = {
   VerifyOtp: {
     melliCode: string;
     phoneNumber: string;
-    demoCode?: string;
   };
   Home: undefined;
   Profile: undefined;

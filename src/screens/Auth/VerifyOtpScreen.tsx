@@ -11,10 +11,18 @@ import { loginWithOtp, requestOtp } from '../../services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyOtp'>;
 
+function maskPhoneForDisplay(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length >= 11) {
+    return `${digits.slice(0, 4)}xxxx${digits.slice(-3)}`;
+  }
+  return phone;
+}
+
 export function VerifyOtpScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { melliCode, phoneNumber, demoCode } = route.params;
-  const [otp, setOtp] = useState(demoCode ?? '');
+  const { melliCode, phoneNumber } = route.params;
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -48,10 +56,8 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
   const handleResend = async () => {
     setResending(true);
     try {
-      const result = await requestOtp(phoneNumber, melliCode);
-      if (result.code) {
-        setOtp(result.code);
-      }
+      await requestOtp(phoneNumber, melliCode);
+      setOtp('');
       Alert.alert('موفق', 'کد تایید مجدد ارسال شد');
     } catch (err) {
       const message =
@@ -76,7 +82,7 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
       />
       <View style={styles.content}>
         <Text style={styles.subtitle}>{Strings.login.otpSubtitle}</Text>
-        <Text style={styles.phone}>{phoneNumber}</Text>
+        <Text style={styles.phone}>{maskPhoneForDisplay(phoneNumber)}</Text>
         <TextField
           value={otp}
           onChangeText={setOtp}
@@ -84,6 +90,8 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
           keyboardType="number-pad"
           error={error}
           maxLength={6}
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
         />
         <PrimaryButton
           label={loading ? Strings.login.loading : Strings.login.verifyOtp}
