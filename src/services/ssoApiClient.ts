@@ -37,6 +37,21 @@ export class SsoApiError extends Error {
   }
 }
 
+function normalizeDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/\D/g, '');
+}
+
+function buildLoginSmsBody(otpCode: string): string {
+  return `کد ورود : ${otpCode}\nمدیریت فناوری اطلاعات شهرداری سبزوار`;
+}
+
+function generateOtpCode(): string {
+  return String(Math.floor(Math.random() * 100_000)).padStart(5, '0');
+}
+
 async function parseEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   const text = await response.text();
   if (!text) {
@@ -74,10 +89,13 @@ async function ssoFetch<T>(
 
   const envelope = await parseEnvelope<T>(response);
   if (!response.ok || envelope.success === false) {
-    throw new SsoApiError(
-      response.status,
-      envelope.message?.trim() || 'خطا در سرویس احراز هویت',
-    );
+    const detail =
+      envelope.message?.trim() ||
+      (typeof envelope.errors === 'string' ? envelope.errors : '') ||
+      (response.status === 400
+        ? 'درخواست نامعتبر (شماره یا کد ملی را بررسی کنید)'
+        : 'خطا در سرویس احراز هویت');
+    throw new SsoApiError(response.status, detail);
   }
   return envelope;
 }
@@ -88,7 +106,12 @@ export type SecondLoginResult =
 
 function normalizePhoneOption(raw: Record<string, unknown>): PhoneOption | null {
   const phoneNumber = String(
-    raw.phoneNumber ?? raw.value ?? raw.maskedPhoneNumber ?? raw.display ?? '',
+    raw.phoneNumber ??
+      raw.value ??
+      raw.mobile ??
+      raw.maskedPhoneNumber ??
+      raw.display ??
+      '',
   ).trim();
   if (!phoneNumber) {
     return null;
@@ -96,7 +119,7 @@ function normalizePhoneOption(raw: Record<string, unknown>): PhoneOption | null 
   const id = typeof raw.id === 'number' ? raw.id : Number(raw.id ?? 0) || 0;
   return {
     id,
-    phoneNumber,
+    phoneNumber: normalizeDigits(phoneNumber) || phoneNumber,
     isPrimary: Boolean(raw.isPrimary),
   };
 }
@@ -158,19 +181,34 @@ export async function secondLogin(
 export async function sendOtp(
   phoneNumber: string,
   melliCode: string,
+  phoneId?: number,
 ): Promise<{ code?: string; message?: string }> {
-  const envelope = await ssoFetch<{ code?: string; message?: string }>(
-    '/api/auth/second-login/send-otp',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        phoneNumber,
-        melliCode,
-        otpCode: '',
-      }),
-    },
-  );
-  return envelope.data ?? { message: 'کد تایید ارسال شد' };
+  const otpCode = generateOtpCode();
+  const payload: Record<string, string | number> = {
+    phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
+    melliCode: normalizeDigits(melliCode),
+    otpCode,
+    smsBody: buildLoginSmsBody(otpCode),
+  };
+  if (phoneId && phoneId > 0) {
+    payload.phoneId = phoneId;
+    payload.id = phoneId;
+  }
+
+  const envelope = await ssoFetch<{
+    code?: string;
+    otpCode?: string;
+    message?: string;
+  }>('/api/auth/second-login/send-otp', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  const data = envelope.data;
+  return {
+    code: data?.code ?? data?.otpCode ?? otpCode,
+    message: data?.message ?? 'کد تایید ارسال شد',
+  };
 }
 
 export async function verifyOtp(
@@ -182,7 +220,11 @@ export async function verifyOtp(
     '/api/auth/second-login/verify-otp',
     {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber, otpCode, melliCode }),
+      body: JSON.stringify({
+        phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
+        otpCode: normalizeDigits(otpCode),
+        melliCode: normalizeDigits(melliCode),
+      }),
     },
   );
   if (!envelope.data?.accessToken) {

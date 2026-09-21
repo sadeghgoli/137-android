@@ -10,7 +10,6 @@ import type { RootStackParamList } from '../../navigation/types';
 import {
   lookupPhonesByMelliCode,
   loginWithMoiBrowser,
-  loginWithSsoPortal,
   normalizeMelliCode,
 } from '../../services/authService';
 
@@ -22,68 +21,13 @@ export function LoginScreen({ navigation }: Props) {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [moiLoading, setMoiLoading] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [moiFallbackMessage, setMoiFallbackMessage] = useState<string>();
 
   const goHome = () => {
     navigation.reset({
       index: 0,
       routes: [{ name: 'Home' }],
     });
-  };
-
-  const handleContinue = async () => {
-    const normalized = normalizeMelliCode(melliCode);
-    if (!normalized) {
-      setError(Strings.login.melliRequired);
-      return;
-    }
-    if (normalized.length !== 10) {
-      setError(Strings.login.melliInvalid);
-      return;
-    }
-
-    setError(undefined);
-    setLoading(true);
-    try {
-      const result = await lookupPhonesByMelliCode(normalized);
-      if (result.kind === 'phones') {
-        navigation.navigate('SelectPhone', {
-          melliCode: result.melliCode,
-          phones: result.phones,
-        });
-        return;
-      }
-
-      Alert.alert('ورود با SSO', result.message, [
-        { text: 'انصراف', style: 'cancel' },
-        {
-          text: 'ورود وزارت کشور',
-          onPress: () => {
-            void handleMoi();
-          },
-        },
-      ]);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'ورود با خطا مواجه شد.';
-      Alert.alert(Strings.common.error, message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePortal = async () => {
-    setPortalLoading(true);
-    try {
-      await loginWithSsoPortal();
-      goHome();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'ورود از portal ناموفق بود';
-      Alert.alert(Strings.common.error, message);
-    } finally {
-      setPortalLoading(false);
-    }
   };
 
   const handleMoi = async () => {
@@ -100,6 +44,40 @@ export function LoginScreen({ navigation }: Props) {
     }
   };
 
+  const handleContinue = async () => {
+    const normalized = normalizeMelliCode(melliCode);
+    if (!normalized) {
+      setError(Strings.login.melliRequired);
+      return;
+    }
+    if (normalized.length !== 10) {
+      setError(Strings.login.melliInvalid);
+      return;
+    }
+
+    setError(undefined);
+    setMoiFallbackMessage(undefined);
+    setLoading(true);
+    try {
+      const result = await lookupPhonesByMelliCode(normalized);
+      if (result.kind === 'phones') {
+        navigation.navigate('SelectPhone', {
+          melliCode: result.melliCode,
+          phones: result.phones,
+        });
+        return;
+      }
+
+      setMoiFallbackMessage(result.message);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'ورود با خطا مواجه شد.';
+      Alert.alert(Strings.common.error, message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -113,18 +91,6 @@ export function LoginScreen({ navigation }: Props) {
       >
         <Text style={styles.title}>{Strings.login.title}</Text>
         <Text style={styles.subtitle}>{Strings.login.subtitle}</Text>
-        <Text style={styles.hint}>{Strings.login.ssoHint}</Text>
-
-        <PrimaryButton
-          label={
-            portalLoading ? Strings.login.portalLoading : Strings.login.portalButton
-          }
-          onPress={() => {
-            void handlePortal();
-          }}
-          loading={portalLoading}
-          style={styles.cta}
-        />
 
         <TextField
           value={melliCode}
@@ -141,19 +107,24 @@ export function LoginScreen({ navigation }: Props) {
             void handleContinue();
           }}
           loading={loading}
-          style={styles.secondaryCta}
+          style={styles.cta}
         />
 
-        <PrimaryButton
-          label={
-            moiLoading ? Strings.login.moiLoading : Strings.login.moiButton
-          }
-          onPress={() => {
-            void handleMoi();
-          }}
-          loading={moiLoading}
-          style={styles.secondaryCta}
-        />
+        {moiFallbackMessage ? (
+          <View style={styles.moiBlock}>
+            <Text style={styles.moiMessage}>{moiFallbackMessage}</Text>
+            <PrimaryButton
+              label={
+                moiLoading ? Strings.login.moiLoading : Strings.login.moiButton
+              }
+              onPress={() => {
+                void handleMoi();
+              }}
+              loading={moiLoading}
+              style={styles.moiButton}
+            />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -188,19 +159,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  hint: {
-    fontFamily: Fonts.regular,
-    fontSize: 12,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-    marginBottom: Spacing.sm,
-  },
   cta: {
     marginTop: Spacing.md,
     alignSelf: 'stretch',
   },
-  secondaryCta: {
+  moiBlock: {
+    marginTop: Spacing.lg,
+    gap: Spacing.md,
+    alignSelf: 'stretch',
+  },
+  moiMessage: {
+    fontFamily: Fonts.regular,
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  moiButton: {
     alignSelf: 'stretch',
     backgroundColor: Colors.textPrimary,
   },

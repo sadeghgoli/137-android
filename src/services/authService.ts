@@ -78,8 +78,9 @@ export async function lookupPhonesByMelliCode(
 export async function requestOtp(
   phoneNumber: string,
   melliCode: string,
+  phoneId?: number,
 ): Promise<{ code?: string }> {
-  return sendOtp(phoneNumber, melliCode);
+  return sendOtp(phoneNumber, melliCode, phoneId);
 }
 
 export async function loginWithOtp(

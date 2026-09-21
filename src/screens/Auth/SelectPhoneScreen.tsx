@@ -18,23 +18,43 @@ import { requestOtp } from '../../services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectPhone'>;
 
+function maskPhoneForDisplay(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length >= 11) {
+    return `${digits.slice(0, 4)}xxxx${digits.slice(-3)}`;
+  }
+  return phone;
+}
+
 export function SelectPhoneScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { melliCode, phones } = route.params;
-  const [selected, setSelected] = useState(phones[0]?.phoneNumber ?? '');
+  const phoneKey = (p: (typeof phones)[number]) =>
+    p.id > 0 ? String(p.id) : p.phoneNumber;
+
+  const [selectedKey, setSelectedKey] = useState(
+    phones[0] ? phoneKey(phones[0]) : '',
+  );
+
+  const selectedPhone =
+    phones.find((p) => phoneKey(p) === selectedKey) ?? phones[0];
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
-    if (!selected) {
+    if (!selectedPhone?.phoneNumber) {
       Alert.alert(Strings.common.error, 'یک شماره انتخاب کنید');
       return;
     }
     setLoading(true);
     try {
-      const result = await requestOtp(selected, melliCode);
+      const result = await requestOtp(
+        selectedPhone.phoneNumber,
+        melliCode,
+        selectedPhone.id,
+      );
       navigation.navigate('VerifyOtp', {
         melliCode,
-        phoneNumber: selected,
+        phoneNumber: selectedPhone.phoneNumber,
         demoCode: result.code,
       });
     } catch (err) {
@@ -64,14 +84,16 @@ export function SelectPhoneScreen({ navigation, route }: Props) {
       >
         <Text style={styles.subtitle}>{Strings.login.selectPhoneSubtitle}</Text>
         {phones.map((phone) => {
-          const active = phone.phoneNumber === selected;
+          const active = phoneKey(phone) === selectedKey;
           return (
             <Pressable
               key={`${phone.id}-${phone.phoneNumber}`}
-              onPress={() => setSelected(phone.phoneNumber)}
+              onPress={() => setSelectedKey(phoneKey(phone))}
               style={[styles.phoneCard, active && styles.phoneCardActive]}
             >
-              <Text style={styles.phoneText}>{phone.phoneNumber}</Text>
+              <Text style={styles.phoneText}>
+                {maskPhoneForDisplay(phone.phoneNumber)}
+              </Text>
               {phone.isPrimary ? (
                 <Text style={styles.primaryBadge}>اصلی</Text>
               ) : null}
