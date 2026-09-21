@@ -180,7 +180,33 @@ export async function secondLogin(
 
 const OTP_FETCH_TIMEOUT_MS = 65_000;
 
+const otpSendInFlight = new Map<string, Promise<{ message?: string }>>();
+
+function otpInFlightKey(phoneNumber: string, melliCode: string): string {
+  return `${normalizeDigits(melliCode)}:${normalizeDigits(phoneNumber)}`;
+}
+
 export async function sendOtp(
+  phoneNumber: string,
+  melliCode: string,
+  phoneId?: number,
+): Promise<{ message?: string }> {
+  const flightKey = otpInFlightKey(phoneNumber, melliCode);
+  const existing = otpSendInFlight.get(flightKey);
+  if (existing) {
+    return existing;
+  }
+
+  const task = sendOtpOnce(phoneNumber, melliCode, phoneId);
+  otpSendInFlight.set(flightKey, task);
+  try {
+    return await task;
+  } finally {
+    otpSendInFlight.delete(flightKey);
+  }
+}
+
+async function sendOtpOnce(
   phoneNumber: string,
   melliCode: string,
   phoneId?: number,

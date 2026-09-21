@@ -47,7 +47,7 @@ export function SelectPhoneScreen({ navigation, route }: Props) {
   const sendBlocked = sendCooldownSec > 0;
 
   const handleSend = async () => {
-    if (sendBlocked) {
+    if (sendBlocked || loading) {
       return;
     }
     if (!selectedPhone?.phoneNumber) {

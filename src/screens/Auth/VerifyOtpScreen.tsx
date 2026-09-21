@@ -57,7 +57,7 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
   };
 
   const handleResend = async () => {
-    if (resendBlocked) {
+    if (resendBlocked || resending) {
       return;
     }
     setResending(true);
