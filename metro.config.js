@@ -33,7 +33,15 @@ const SSO_OTP_UPSTREAM_HOST_HEADER = (
   ''
 ).trim();
 
-const SSO_OTP_UPSTREAM_PATH = '/api/citizen/send-login-otp';
+const SSO_CITIZEN_OTP_PATH_RAW =
+  appJson.expo?.extra?.ssoCitizenOtpPath || '/api/citizen/send-login-otp';
+const SSO_CITIZEN_OTP_PATH = SSO_CITIZEN_OTP_PATH_RAW.startsWith('/')
+  ? SSO_CITIZEN_OTP_PATH_RAW
+  : `/${SSO_CITIZEN_OTP_PATH_RAW}`;
+
+const SSO_PORTAL_WEB_PROXY_PREFIX = (
+  appJson.expo?.extra?.ssoPortalWebProxyPrefix || '/sso-portal-api'
+).replace(/\/$/, '');
 
 function resolveOtpUpstreamBase() {
   if (SSO_OTP_UPSTREAM_BASE) {
@@ -61,7 +69,7 @@ function resolveOtpUpstreamHostHeader(upstreamBase) {
 const otpUpstreamBaseForLog = resolveOtpUpstreamBase();
 console.log(`[sso-proxy] login API ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`);
 console.log(
-  `[sso-proxy] OTP+SMS ${otpUpstreamBaseForLog}${SSO_OTP_UPSTREAM_PATH} (Host: ${resolveOtpUpstreamHostHeader(otpUpstreamBaseForLog)})`,
+  `[sso-proxy] portal OTP ${otpUpstreamBaseForLog}${SSO_CITIZEN_OTP_PATH} (web prefix ${SSO_PORTAL_WEB_PROXY_PREFIX}, Host: ${resolveOtpUpstreamHostHeader(otpUpstreamBaseForLog)})`,
 );
 
 function ssoCorsHeaders(req) {
@@ -228,7 +236,7 @@ function forwardToUpstream(req, res, upstreamUrl, cors, timeoutMs, hostHeader) {
   });
 }
 
-function handleSsoOtpSend(req, res) {
+function handleSsoPortalProxy(req, res) {
   const cors = ssoCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {
@@ -237,14 +245,39 @@ function handleSsoOtpSend(req, res) {
     return;
   }
 
+  const rawUrl = req.url || '';
+  const parsed = new URL(rawUrl, 'http://localhost');
+  const upstreamPath =
+    parsed.pathname.replace(new RegExp(`^${SSO_PORTAL_WEB_PROXY_PREFIX}(?=\\/|$)`), '') +
+    parsed.search;
+
+  if (!upstreamPath || upstreamPath === '/') {
+    res.writeHead(404, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Unknown portal API path');
+    return;
+  }
+
+  const upstreamBase = resolveOtpUpstreamBase();
+  const upstreamUrl = new URL(upstreamPath, `${upstreamBase}/`);
+  const hostHeader = resolveOtpUpstreamHostHeader(upstreamBase);
+  forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS, hostHeader);
+}
+
+/** @deprecated alias — same as portal proxy with fixed citizen path */
+function handleSsoOtpSend(req, res) {
+  const cors = ssoCorsHeaders(req);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, cors);
+    res.end();
+    return;
+  }
   if (req.method !== 'POST') {
     res.writeHead(405, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Method Not Allowed');
     return;
   }
-
   const upstreamBase = resolveOtpUpstreamBase();
-  const upstreamUrl = new URL(SSO_OTP_UPSTREAM_PATH, `${upstreamBase}/`);
+  const upstreamUrl = new URL(SSO_CITIZEN_OTP_PATH, `${upstreamBase}/`);
   const hostHeader = resolveOtpUpstreamHostHeader(upstreamBase);
   forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS, hostHeader);
 }
@@ -341,6 +374,11 @@ config.server = {
     return (req, res, next) => {
       try {
         const rawUrl = req.url || '';
+
+        if (rawUrl.startsWith(SSO_PORTAL_WEB_PROXY_PREFIX)) {
+          handleSsoPortalProxy(req, res);
+          return;
+        }
 
         if (rawUrl.startsWith('/sso-otp-send')) {
           handleSsoOtpSend(req, res);

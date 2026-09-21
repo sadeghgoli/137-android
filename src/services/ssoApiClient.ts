@@ -1,8 +1,4 @@
-import {
-  SSO_API_URL,
-  SSO_CALLBACK_URL,
-  SSO_OTP_SEND_URL,
-} from '../constants/apiConfig';
+import { SSO_CALLBACK_URL } from '../constants/apiConfig';
 import {
   assertOtpCooldownAllowsSend,
   markOtpSent,
@@ -178,9 +174,11 @@ export async function secondLogin(
   };
 }
 
-const OTP_FETCH_TIMEOUT_MS = 65_000;
-
 const otpSendInFlight = new Map<string, Promise<{ message?: string }>>();
+
+function generateOtpCode(): string {
+  return String(Math.floor(Math.random() * 100_000)).padStart(5, '0');
+}
 
 function otpInFlightKey(phoneNumber: string, melliCode: string): string {
   return `${normalizeDigits(melliCode)}:${normalizeDigits(phoneNumber)}`;
@@ -209,51 +207,22 @@ export async function sendOtp(
 async function sendOtpOnce(
   phoneNumber: string,
   melliCode: string,
-  phoneId?: number,
+  _phoneId?: number,
 ): Promise<{ message?: string }> {
   await assertOtpCooldownAllowsSend(phoneNumber, melliCode);
 
-  const payload: Record<string, string | number> = {
-    phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
-    melliCode: normalizeDigits(melliCode),
-  };
-  if (phoneId && phoneId > 0) {
-    payload.phoneId = phoneId;
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OTP_FETCH_TIMEOUT_MS);
-
-  let response: Response;
-  try {
-    response = await fetch(SSO_OTP_SEND_URL, {
+  const otpCode = generateOtpCode();
+  const envelope = await ssoFetch<{ message?: string }>(
+    '/api/auth/second-login/send-otp',
+    {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new SsoApiError(
-        0,
-        'زمان درخواست تمام شد. اتصال به سرویس ارسال پیامک برقرار نشد.',
-      );
-    }
-    throw new SsoApiError(0, 'خطا در ارتباط با سرویس ارسال پیامک');
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  const envelope = await parseEnvelope<{ message?: string }>(response);
-  if (!response.ok || envelope.success === false) {
-    throw new SsoApiError(
-      response.status,
-      envelope.message?.trim() || 'ارسال کد تایید ناموفق بود',
-    );
-  }
+      body: JSON.stringify({
+        phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
+        melliCode: normalizeDigits(melliCode),
+        otpCode,
+      }),
+    },
+  );
 
   await markOtpSent(phoneNumber, melliCode);
 
