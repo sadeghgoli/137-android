@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 type ApiExtra = {
   apiBaseUrl?: string;
@@ -24,11 +25,17 @@ export const API_BASE_URL =
 export const SSO_WEB_URL =
   extra.ssoWebUrl?.replace(/\/$/, '') ?? 'https://auth.sabzevar.ir';
 
-/** SSO REST API (used by portal + mobile second-login) */
-export const SSO_API_URL =
+const configuredSsoApiUrl =
   extra.ssoApiUrl?.replace(/\/$/, '') ??
   extra.ssoBaseUrl?.replace(/\/$/, '') ??
   'https://apiweb-loginsso.sabzevar.ir';
+
+/**
+ * Web: same-origin proxy (/sso-api → apiweb-loginsso) to avoid browser CORS.
+ * Native: direct HTTPS to SSO API.
+ */
+export const SSO_API_URL =
+  Platform.OS === 'web' ? '/sso-api' : configuredSsoApiUrl;
 
 /** @deprecated alias of SSO_API_URL */
 export const SSO_BASE_URL = SSO_API_URL;

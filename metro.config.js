@@ -6,8 +6,111 @@ const { execSync } = require('child_process');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const config = getDefaultConfig(__dirname);
+const appJson = require('./app.json');
 
 const UPSTREAM_TIMEOUT_MS = 120000;
+const SSO_PROXY_TIMEOUT_MS = 60000;
+const SSO_UPSTREAM_BASE = (
+  process.env.SSO_API_UPSTREAM ||
+  appJson.expo?.extra?.ssoApiUrl ||
+  'https://apiweb-loginsso.sabzevar.ir'
+).replace(/\/$/, '');
+
+console.log(`[sso-proxy] upstream ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`);
+
+function ssoCorsHeaders(req) {
+  const origin = req.headers.origin || '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    Vary: 'Origin',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers':
+      req.headers['access-control-request-headers'] ||
+      'Content-Type, Authorization, Accept, X-Requested-With',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function handleSsoApiProxy(req, res) {
+  const cors = ssoCorsHeaders(req);
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, cors);
+    res.end();
+    return;
+  }
+
+  const rawUrl = req.url || '';
+  const parsed = new URL(rawUrl, 'http://localhost');
+  const upstreamPath =
+    parsed.pathname.replace(/^\/sso-api(?=\/|$)/, '') + parsed.search;
+  const upstreamUrl = new URL(upstreamPath || '/', `${SSO_UPSTREAM_BASE}/`);
+
+  const forwardHeaders = {
+    Accept: req.headers.accept || 'application/json',
+    'User-Agent': 'Sabzevar137-SsoProxy/1.0',
+  };
+  if (req.headers['content-type']) {
+    forwardHeaders['Content-Type'] = req.headers['content-type'];
+  }
+  if (req.headers.authorization) {
+    forwardHeaders.Authorization = req.headers.authorization;
+  }
+
+  const chunks = [];
+  req.on('data', (chunk) => chunks.push(chunk));
+  req.on('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(400, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad request body');
+    }
+  });
+  req.on('end', () => {
+    const body = Buffer.concat(chunks);
+    const transport = upstreamUrl.protocol === 'http:' ? http : https;
+    const requestOpts = {
+      protocol: upstreamUrl.protocol,
+      hostname: upstreamUrl.hostname,
+      port: upstreamUrl.port || (upstreamUrl.protocol === 'http:' ? 80 : 443),
+      path: upstreamUrl.pathname + upstreamUrl.search,
+      method: req.method,
+      headers: forwardHeaders,
+      timeout: SSO_PROXY_TIMEOUT_MS,
+    };
+    if (body.length > 0) {
+      forwardHeaders['Content-Length'] = String(body.length);
+    }
+
+    const upstream = transport.request(requestOpts, (upRes) => {
+      const outHeaders = { ...cors };
+      if (upRes.headers['content-type']) {
+        outHeaders['Content-Type'] = upRes.headers['content-type'];
+      }
+      res.writeHead(upRes.statusCode || 502, outHeaders);
+      upRes.pipe(res);
+    });
+
+    upstream.on('timeout', () => {
+      upstream.destroy();
+      if (!res.headersSent) {
+        res.writeHead(504, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(`SSO upstream timeout after ${SSO_PROXY_TIMEOUT_MS}ms`);
+      }
+    });
+
+    upstream.on('error', (error) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { ...cors, 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(`SSO upstream error: ${error.message}`);
+      }
+    });
+
+    if (body.length > 0) {
+      upstream.write(body);
+    }
+    upstream.end();
+  });
+}
 
 /**
  * Resolve HTTP proxy for geo.sabzevar.ir upstream.
@@ -101,6 +204,11 @@ config.server = {
     return (req, res, next) => {
       try {
         const rawUrl = req.url || '';
+
+        if (rawUrl.startsWith('/sso-api')) {
+          handleSsoApiProxy(req, res);
+          return;
+        }
 
         // Diagnostic for the in-app MAP DEBUG panel
         if (rawUrl.startsWith('/map-proxy-status')) {

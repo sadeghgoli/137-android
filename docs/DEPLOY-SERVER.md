@@ -22,9 +22,22 @@ BROWSER=none npx expo start --web --lan --port 5037 -c
 
 ---
 
-## nginx → Metro
+## nginx → Metro + SSO API (CORS)
+
+مرورگر وب به `/sso-api` می‌زند (same-origin)؛ nginx به SSO واقعی forward می‌کند.
 
 ```nginx
+# SSO API — قبل از location / عمومی
+location /sso-api/ {
+    proxy_pass https://apiweb-loginsso.sabzevar.ir/;
+    proxy_http_version 1.1;
+    proxy_set_header Host apiweb-loginsso.sabzevar.ir;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_ssl_server_name on;
+}
+
 location / {
     proxy_pass http://127.0.0.1:5037;
     proxy_http_version 1.1;
@@ -35,6 +48,8 @@ location / {
     proxy_read_timeout 86400;
 }
 ```
+
+در حالت dev، Metro خودش `/sso-api` را proxy می‌کند (`metro.config.js`). اگر فقط nginx دارید و Metro پشت آن است، **هر دو** مسیر `/sso-api` باید به loginsso برسد (یا فقط nginx و Metro بدون duplicate — اگر همه چیز از nginx می‌آید، nginx `/sso-api` را مستقیم به loginsso بدهد و به Metro نفرستید).
 
 ---
 
