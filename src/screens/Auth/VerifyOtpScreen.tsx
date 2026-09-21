@@ -7,6 +7,7 @@ import { PrimaryButton, TextField } from '../../components';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Colors, Fonts, Spacing, Strings } from '../../constants';
 import type { RootStackParamList } from '../../navigation/types';
+import { useOtpCooldown } from '../../hooks/useOtpCooldown';
 import { loginWithOtp, requestOtp } from '../../services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyOtp'>;
@@ -26,6 +27,8 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const resendCooldownSec = useOtpCooldown(phoneNumber, melliCode);
+  const resendBlocked = resendCooldownSec > 0;
 
   const goHome = () => {
     navigation.reset({
@@ -54,6 +57,9 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
   };
 
   const handleResend = async () => {
+    if (resendBlocked) {
+      return;
+    }
     setResending(true);
     try {
       await requestOtp(phoneNumber, melliCode);
@@ -102,11 +108,16 @@ export function VerifyOtpScreen({ navigation, route }: Props) {
           style={styles.cta}
         />
         <PrimaryButton
-          label={Strings.login.resendOtp}
+          label={
+            resendBlocked
+              ? `ارسال مجدد (${resendCooldownSec} ثانیه)`
+              : Strings.login.resendOtp
+          }
           onPress={() => {
             void handleResend();
           }}
           loading={resending}
+          disabled={resendBlocked}
           style={styles.secondary}
         />
       </View>

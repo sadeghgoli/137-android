@@ -14,6 +14,7 @@ import { PrimaryButton } from '../../components';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Colors, Fonts, Spacing, Strings } from '../../constants';
 import type { RootStackParamList } from '../../navigation/types';
+import { useOtpCooldown } from '../../hooks/useOtpCooldown';
 import { requestOtp } from '../../services/authService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectPhone'>;
@@ -39,8 +40,16 @@ export function SelectPhoneScreen({ navigation, route }: Props) {
   const selectedPhone =
     phones.find((p) => phoneKey(p) === selectedKey) ?? phones[0];
   const [loading, setLoading] = useState(false);
+  const sendCooldownSec = useOtpCooldown(
+    selectedPhone?.phoneNumber ?? '',
+    melliCode,
+  );
+  const sendBlocked = sendCooldownSec > 0;
 
   const handleSend = async () => {
+    if (sendBlocked) {
+      return;
+    }
     if (!selectedPhone?.phoneNumber) {
       Alert.alert(Strings.common.error, 'یک شماره انتخاب کنید');
       return;
@@ -100,11 +109,18 @@ export function SelectPhoneScreen({ navigation, route }: Props) {
           );
         })}
         <PrimaryButton
-          label={loading ? Strings.login.loading : Strings.login.sendOtp}
+          label={
+            loading
+              ? Strings.login.loading
+              : sendBlocked
+                ? `ارسال مجدد (${sendCooldownSec} ثانیه)`
+                : Strings.login.sendOtp
+          }
           onPress={() => {
             void handleSend();
           }}
           loading={loading}
+          disabled={sendBlocked}
           style={styles.cta}
         />
       </ScrollView>

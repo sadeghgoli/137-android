@@ -38,11 +38,23 @@ const configuredSsoApiUrl =
 export const SSO_API_URL =
   Platform.OS === 'web' ? '/sso-api' : configuredSsoApiUrl;
 
-/** OTP+SMS via mvc-web-sso (auth.sabzevar.ir). Web uses Metro proxy to avoid CORS. */
-export const SSO_OTP_SEND_URL =
-  Platform.OS === 'web'
-    ? '/sso-otp-send'
-    : `${SSO_WEB_URL.replace(/\/$/, '')}/api/auth/second-login/send-otp`;
+/** OTP+SMS via mvc-web-sso (auth.sabzevar.ir). Local web dev uses Metro /sso-otp-send. */
+export const SSO_OTP_SEND_URL = (() => {
+  const portal = `${SSO_WEB_URL.replace(/\/$/, '')}/api/auth/second-login/send-otp`;
+  if (Platform.OS !== 'web') {
+    return portal;
+  }
+  const host =
+    typeof globalThis !== 'undefined' &&
+    'location' in globalThis &&
+    globalThis.location?.hostname
+      ? globalThis.location.hostname
+      : '';
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return '/sso-otp-send';
+  }
+  return portal;
+})();
 
 /** @deprecated alias of SSO_API_URL */
 export const SSO_BASE_URL = SSO_API_URL;

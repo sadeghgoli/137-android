@@ -3,6 +3,10 @@ import {
   SSO_CALLBACK_URL,
   SSO_OTP_SEND_URL,
 } from '../constants/apiConfig';
+import {
+  assertOtpCooldownAllowsSend,
+  markOtpSent,
+} from '../utils/otpCooldown';
 
 export type ApiEnvelope<T> = {
   success: boolean;
@@ -174,11 +178,15 @@ export async function secondLogin(
   };
 }
 
+const OTP_FETCH_TIMEOUT_MS = 65_000;
+
 export async function sendOtp(
   phoneNumber: string,
   melliCode: string,
   phoneId?: number,
 ): Promise<{ message?: string }> {
+  await assertOtpCooldownAllowsSend(phoneNumber, melliCode);
+
   const payload: Record<string, string | number> = {
     phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
     melliCode: normalizeDigits(melliCode),
@@ -186,6 +194,9 @@ export async function sendOtp(
   if (phoneId && phoneId > 0) {
     payload.phoneId = phoneId;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OTP_FETCH_TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -196,9 +207,18 @@ export async function sendOtp(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new SsoApiError(
+        0,
+        'زمان درخواست تمام شد. اتصال به سرویس ارسال پیامک برقرار نشد.',
+      );
+    }
     throw new SsoApiError(0, 'خطا در ارتباط با سرویس ارسال پیامک');
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const envelope = await parseEnvelope<{ message?: string }>(response);
@@ -208,6 +228,8 @@ export async function sendOtp(
       envelope.message?.trim() || 'ارسال کد تایید ناموفق بود',
     );
   }
+
+  await markOtpSent(phoneNumber, melliCode);
 
   return {
     message: envelope.data?.message ?? envelope.message ?? 'کد تایید ارسال شد',

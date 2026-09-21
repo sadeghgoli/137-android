@@ -52,6 +52,18 @@ location /sso-api/ {
     proxy_ssl_server_name on;
 }
 
+# فقط برای dev لوکال (localhost) — روی test-137 مستقیم auth.sabzevar.ir + CORS
+location = /sso-otp-send {
+    proxy_pass https://auth.sabzevar.ir/api/auth/second-login/send-otp;
+    proxy_http_version 1.1;
+    proxy_set_header Host auth.sabzevar.ir;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_ssl_server_name on;
+    proxy_read_timeout 70s;
+}
+
 location / {
     proxy_pass http://127.0.0.1:5037;
     proxy_http_version 1.1;
@@ -80,7 +92,7 @@ npx expo export --platform web
 
 ## SMS OTP (وب test-137)
 
-ارسال پیامک فقط از **auth.sabzevar.ir** (mvc-web-sso / `OtpDeliveryService` + `Sms:Token`) انجام می‌شود؛ فرانت و Metro فقط درخواست `POST /sso-otp-send` را به همان API پورتال فوروارد می‌کنند.
+ارسال پیامک فقط از **auth.sabzevar.ir** (`POST /api/auth/second-login/send-otp`). روی **test-137** مرورگر مستقیم به auth می‌زند (CORS). مسیر `/sso-otp-send` فقط برای localhost/Metro است — اگر nginx آن را به Metro بدهد بدون handler، درخواست گیر می‌کند.
 
 روی سرور پورتال: `appsettings.json` → `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader` و دسترسی به `192.168.1.30`.
 
