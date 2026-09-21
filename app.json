@@ -1,13 +1,22 @@
 {
   "expo": {
-    "name": "ابر",
-    "slug": "aber",
-    "version": "1.0.0",
+    "name": "سبزوار من",
+    "slug": "sabzevar-137",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "sabzevar137",
     "extra": {
-      "supportsRTL": true
+      "supportsRTL": true,
+      "apiBaseUrl": "https://apiweb-137request.sabzevar.ir",
+      "ssoWebUrl": "https://auth.sabzevar.ir",
+      "ssoApiUrl": "https://apiweb-loginsso.sabzevar.ir",
+      "apiKey": "dev-internal-key-137",
+      "requestChannel": "CitizenMobileApp",
+      "eas": {
+        "projectId": "4f161ade-3b41-42d8-b05e-1d155c09efd6"
+      }
     },
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -19,11 +28,14 @@
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
         "CFBundleDevelopmentRegion": "fa",
-        "NSLocationWhenInUseUsageDescription": "ابر برای پیدا کردن سفرها و مکان‌های نزدیک به موقعیت شما نیاز دارد."
+        "NSLocationWhenInUseUsageDescription": "سامانه ۱۳۷ سبزوار برای ثبت موقعیت درخواست به دسترسی مکان نیاز دارد.",
+        "NSPhotoLibraryUsageDescription": "برای پیوست تصویر به درخواست به گالری دسترسی لازم است."
       }
     },
     "android": {
-      "package": "com.aber.app",
+      "package": "com.sabzevar137.app",
+      "versionCode": 2,
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#48DDB0",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -31,8 +43,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -43,7 +58,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ابر برای پیدا کردن سفرها و مکان‌های نزدیک به موقعیت شما نیاز دارد."
+          "locationWhenInUsePermission": "سامانه ۱۳۷ سبزوار برای ثبت موقعیت درخواست به دسترسی مکان نیاز دارد."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "برای پیوست تصویر به درخواست به گالری دسترسی لازم است."
         }
       ],
       [
@@ -56,7 +77,11 @@
             "./src/assets/fonts/Vazirmatn-Bold.ttf"
           ]
         }
-      ]
-    ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      "@maplibre/maplibre-react-native"
+    ],
+    "owner": "msadegh.goli"
   }
 }

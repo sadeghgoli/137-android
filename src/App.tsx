@@ -38,7 +38,7 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    direction: I18nManager.isRTL ? 'rtl' : 'ltr',
+    writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr',
   },
   boot: {
     flex: 1,

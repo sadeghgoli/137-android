@@ -5,6 +5,7 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   StyleSheet,
+  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -12,9 +13,11 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Images } from '../../assets';
-import { Colors, Strings } from '../../constants';
+import { Colors, Fonts, Spacing, Strings } from '../../constants';
 import type { RootStackParamList } from '../../navigation/types';
-import { isOnboardingCompleted } from '../../services/onboardingStorage';
+import { isAuthenticated } from '../../services/authService';
+import { shouldSkipOnboarding } from '../../services/onboardingStorage';
+import { createShadow } from '../../utils/shadow';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
@@ -50,15 +53,29 @@ export function SplashScreen({ navigation }: Props) {
     let cancelled = false;
 
     const timer = setTimeout(async () => {
-      const completed = await isOnboardingCompleted();
-      if (cancelled) {
-        return;
-      }
+      try {
+        const [authed, skipGuide] = await Promise.all([
+          isAuthenticated(),
+          shouldSkipOnboarding(),
+        ]);
+        if (cancelled) {
+          return;
+        }
 
-      if (completed) {
-        navigation.replace('SetupLocation');
-      } else {
+        if (authed) {
+          navigation.replace('Home');
+          return;
+        }
+        if (skipGuide) {
+          navigation.replace('Login');
+          return;
+        }
         navigation.replace('Onboarding');
+      } catch (error) {
+        console.warn('[Splash] bootstrap failed', error);
+        if (!cancelled) {
+          navigation.replace('Login');
+        }
       }
     }, SPLASH_DURATION_MS);
 
@@ -73,12 +90,15 @@ export function SplashScreen({ navigation }: Props) {
     };
   }, [logoOpacity, logoScale, navigation]);
 
-  const logoWidth = Math.min(width * 0.34, 140);
-  const logoHeight = logoWidth * (216 / 154);
-  const cityHeight = Math.min(height * 0.28, 210);
+  const logoWidth = Math.min(width * 0.52, height * 0.36, 280);
+  const logoHeight = logoWidth;
+  const cityHeight = Math.min(height * 0.22, 180);
 
   return (
-    <View style={styles.container} accessibilityLabel={Strings.splashAccessibility}>
+    <View
+      style={styles.container}
+      accessibilityLabel={Strings.splashAccessibility}
+    >
       <StatusBar style="light" />
 
       <View style={styles.center}>
@@ -98,11 +118,15 @@ export function SplashScreen({ navigation }: Props) {
             accessibilityLabel={Strings.logoAccessibility}
           />
         </Animated.View>
+        <Animated.View style={{ opacity: logoOpacity }}>
+          <Text style={styles.system}>{Strings.brand.system}</Text>
+          <Text style={styles.city}>{Strings.brand.city}</Text>
+        </Animated.View>
       </View>
 
       <Image
         source={Images.cityBackground}
-        style={[styles.city, { width, height: cityHeight }]}
+        style={[styles.cityBg, { width, height: cityHeight }]}
         resizeMode="cover"
         accessible={false}
         importantForAccessibility="no"
@@ -123,13 +147,25 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   logoShadow: {
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 10,
+    ...createShadow({ offsetY: 8, blur: 16, opacity: 0.18, elevation: 10 }),
+    marginBottom: Spacing.md,
+  },
+  system: {
+    fontFamily: Fonts.bold,
+    fontSize: 22,
+    color: Colors.white,
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   city: {
+    marginTop: Spacing.xs,
+    fontFamily: Fonts.medium,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.92)',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  cityBg: {
     position: 'absolute',
     left: 0,
     right: 0,

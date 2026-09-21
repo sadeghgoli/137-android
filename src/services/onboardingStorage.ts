@@ -6,15 +6,33 @@ export async function isOnboardingCompleted(): Promise<boolean> {
   return value === 'true';
 }
 
-export async function setOnboardingCompleted(): Promise<void> {
-  await AsyncStorage.setItem(StorageKeys.onboardingCompleted, 'true');
+export async function shouldSkipOnboarding(): Promise<boolean> {
+  const dontShow = await AsyncStorage.getItem(StorageKeys.onboardingDontShow);
+  if (dontShow === 'true') {
+    return true;
+  }
+  return isOnboardingCompleted();
 }
 
-/** Development helper — call from a debug console / DevMenu to reset flow. */
+export async function completeOnboarding(dontShowAgain: boolean): Promise<void> {
+  const entries: Record<string, string> = {
+    [StorageKeys.onboardingCompleted]: 'true',
+  };
+  if (dontShowAgain) {
+    entries[StorageKeys.onboardingDontShow] = 'true';
+  }
+  await AsyncStorage.multiSet(Object.entries(entries));
+}
+
+/** Development helper to reset citizen app local state. */
 export async function resetOnboarding(): Promise<void> {
-  await AsyncStorage.removeMany([
+  await AsyncStorage.multiRemove([
     StorageKeys.onboardingCompleted,
-    StorageKeys.userLatitude,
-    StorageKeys.userLongitude,
+    StorageKeys.onboardingDontShow,
+    StorageKeys.isAuthenticated,
+    StorageKeys.authUser,
+    StorageKeys.requests,
+    StorageKeys.notifications,
+    StorageKeys.requestsSeeded,
   ]);
 }

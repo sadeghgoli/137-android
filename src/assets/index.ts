@@ -7,4 +7,8 @@ export const Images = {
   step4: require('./step-4.png'),
   marker: require('./marker.png'),
   check: require('./check.png'),
+  user1: require('./user-1.png'),
+  user2: require('./user-2.png'),
+  user3: require('./user-3.png'),
+  win: require('./win.png'),
 } as const;
