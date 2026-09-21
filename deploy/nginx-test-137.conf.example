@@ -1,0 +1,42 @@
+# Snippet for https://test-137.sabzevar.ir
+# IMPORTANT: /sso-otp-send and /sso-api must appear BEFORE `location /`.
+
+server {
+    listen 443 ssl http2;
+    server_name test-137.sabzevar.ir;
+
+    # ... ssl_certificate ...
+
+    # OTP + SMS via auth portal (same-origin — no browser CORS)
+    location = /sso-otp-send {
+        proxy_pass https://auth.sabzevar.ir/api/auth/second-login/send-otp;
+        proxy_http_version 1.1;
+        proxy_set_header Host auth.sabzevar.ir;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_ssl_server_name on;
+        proxy_read_timeout 70s;
+        client_max_body_size 32k;
+    }
+
+    location /sso-api/ {
+        proxy_pass https://apiweb-loginsso.sabzevar.ir/;
+        proxy_http_version 1.1;
+        proxy_set_header Host apiweb-loginsso.sabzevar.ir;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_ssl_server_name on;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:5037;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}

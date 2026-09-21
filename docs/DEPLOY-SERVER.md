@@ -75,7 +75,13 @@ location / {
 }
 ```
 
-در حالت dev، Metro خودش `/sso-api` را proxy می‌کند (`metro.config.js`). اگر فقط nginx دارید و Metro پشت آن است، **هر دو** مسیر `/sso-api` باید به loginsso برسد (یا فقط nginx و Metro بدون duplicate — اگر همه چیز از nginx می‌آید، nginx `/sso-api` را مستقیم به loginsso بدهد و به Metro نفرستید).
+در حالت dev، Metro خودش `/sso-api` و `/sso-otp-send` را proxy می‌کند (`metro.config.js`).
+
+**الزامی برای ارسال OTP روی test-137:** nginx باید `location = /sso-otp-send` را **قبل از** `location /` به `auth.sabzevar.ir` فوروارد کند — وگرنه درخواست به Metro می‌رود و گیر می‌کند یا CORS خطا می‌دهد. نمونه کامل: `deploy/nginx-test-137.conf.example`
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ---
 
@@ -92,7 +98,7 @@ npx expo export --platform web
 
 ## SMS OTP (وب test-137)
 
-ارسال پیامک فقط از **auth.sabzevar.ir** (`POST /api/auth/second-login/send-otp`). روی **test-137** مرورگر مستقیم به auth می‌زند (CORS). مسیر `/sso-otp-send` فقط برای localhost/Metro است — اگر nginx آن را به Metro بدهد بدون handler، درخواست گیر می‌کند.
+ارسال پیامک از **auth.sabzevar.ir**؛ مرورگر فقط `POST /sso-otp-send` (same-origin) می‌زند و nginx به پورتال فوروارد می‌کند.
 
 روی سرور پورتال: `appsettings.json` → `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader` و دسترسی به `192.168.1.30`.
 
