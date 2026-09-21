@@ -15,16 +15,54 @@ const SSO_UPSTREAM_BASE = (
   'https://apiweb-loginsso.sabzevar.ir'
 ).replace(/\/$/, '');
 
-const SSO_WEB_BASE = (
+const SSO_WEB_PUBLIC =
+  (appJson.expo?.extra?.ssoWebUrl || 'https://auth.sabzevar.ir').replace(/\/$/, '');
+
+/** Metro/Node only: LAN URL of mvc-web-sso (Kestrel :5002). Public auth URL often times out from datacenter. */
+const SSO_OTP_UPSTREAM_BASE = (
   process.env.SSO_WEB_UPSTREAM ||
-  appJson.expo?.extra?.ssoWebUrl ||
-  'https://auth.sabzevar.ir'
-).replace(/\/$/, '');
+  appJson.expo?.extra?.ssoWebUpstream ||
+  ''
+)
+  .trim()
+  .replace(/\/$/, '');
+
+const SSO_OTP_UPSTREAM_HOST_HEADER = (
+  process.env.SSO_WEB_UPSTREAM_HOST ||
+  appJson.expo?.extra?.ssoWebUpstreamHost ||
+  ''
+).trim();
 
 const SSO_OTP_UPSTREAM_PATH = '/api/auth/second-login/send-otp';
 
+function resolveOtpUpstreamBase() {
+  if (SSO_OTP_UPSTREAM_BASE) {
+    return SSO_OTP_UPSTREAM_BASE;
+  }
+  console.warn(
+    '[sso-proxy] SSO_WEB_UPSTREAM / extra.ssoWebUpstream not set — OTP proxy uses public URL (may timeout on server)',
+  );
+  return SSO_WEB_PUBLIC;
+}
+
+function resolveOtpUpstreamHostHeader(upstreamBase) {
+  if (SSO_OTP_UPSTREAM_HOST_HEADER) {
+    return SSO_OTP_UPSTREAM_HOST_HEADER;
+  }
+  try {
+    return new URL(
+      upstreamBase.startsWith('http') ? upstreamBase : `http://${upstreamBase}`,
+    ).hostname;
+  } catch {
+    return 'auth.sabzevar.ir';
+  }
+}
+
+const otpUpstreamBaseForLog = resolveOtpUpstreamBase();
 console.log(`[sso-proxy] login API ${SSO_UPSTREAM_BASE} (timeout ${SSO_PROXY_TIMEOUT_MS}ms)`);
-console.log(`[sso-proxy] OTP+SMS ${SSO_WEB_BASE}${SSO_OTP_UPSTREAM_PATH}`);
+console.log(
+  `[sso-proxy] OTP+SMS ${otpUpstreamBaseForLog}${SSO_OTP_UPSTREAM_PATH} (Host: ${resolveOtpUpstreamHostHeader(otpUpstreamBaseForLog)})`,
+);
 
 function ssoCorsHeaders(req) {
   const origin = req.headers.origin || '*';
@@ -123,11 +161,14 @@ function handleSsoApiProxy(req, res) {
   });
 }
 
-function forwardToUpstream(req, res, upstreamUrl, cors, timeoutMs) {
+function forwardToUpstream(req, res, upstreamUrl, cors, timeoutMs, hostHeader) {
   const forwardHeaders = {
     Accept: req.headers.accept || 'application/json',
     'User-Agent': 'Sabzevar137-SsoProxy/1.0',
   };
+  if (hostHeader) {
+    forwardHeaders.Host = hostHeader;
+  }
   if (req.headers['content-type']) {
     forwardHeaders['Content-Type'] = req.headers['content-type'];
   }
@@ -202,8 +243,10 @@ function handleSsoOtpSend(req, res) {
     return;
   }
 
-  const upstreamUrl = new URL(SSO_OTP_UPSTREAM_PATH, `${SSO_WEB_BASE}/`);
-  forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS);
+  const upstreamBase = resolveOtpUpstreamBase();
+  const upstreamUrl = new URL(SSO_OTP_UPSTREAM_PATH, `${upstreamBase}/`);
+  const hostHeader = resolveOtpUpstreamHostHeader(upstreamBase);
+  forwardToUpstream(req, res, upstreamUrl, cors, SSO_PROXY_TIMEOUT_MS, hostHeader);
 }
 
 /**

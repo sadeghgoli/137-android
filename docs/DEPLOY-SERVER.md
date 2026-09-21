@@ -98,13 +98,43 @@ npx expo export --platform web
 
 ## SMS OTP (وب test-137)
 
-ارسال پیامک از **auth.sabzevar.ir**؛ مرورگر فقط `POST /sso-otp-send` (same-origin) می‌زند و nginx به پورتال فوروارد می‌کند.
+همان سرویس **mvc-web-sso** (پورتال `Views` + `AuthApiController` + ERP SMS). مرورگر `POST /sso-otp-send` می‌زند؛ Metro به **Kestrel داخلی** فوروارد می‌کند (نه `https://auth.sabzevar.ir` از داخل DC — معمولاً timeout می‌دهد).
 
-روی سرور پورتال: `appsettings.json` → `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader` و دسترسی به `192.168.1.30`.
+### ۱) پورتال (shahrdari-central-web)
+
+- `appsettings.json`: `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader`
+- API: `POST /api/auth/second-login/send-otp`
+- Kestrel: پورت **5002** (همان ماشین یا IP LAN)
+
+### ۲) Metro روی سرور 137
+
+در `app.json` → `extra` (یا env):
+
+| کلید | مثال |
+|------|------|
+| `ssoWebUpstream` | `http://192.168.1.XX:5002` (IP سرور پورتال؛ اگر پورتال روی همان ماشین 137 است: `http://127.0.0.1:5002`) |
+| `ssoWebUpstreamHost` | `auth.sabzevar.ir` (اختیاری) |
+
+یا قبل از `npm run web:server`:
+
+```bash
+export SSO_WEB_UPSTREAM=http://192.168.1.XX:5002
+export SSO_WEB_UPSTREAM_HOST=auth.sabzevar.ir
+```
+
+تست از گیت‌وی یا همان شبکه:
+
+```bash
+curl -sS -m 15 -X POST http://192.168.1.12:5037/sso-otp-send \
+  -H "Content-Type: application/json" \
+  -d '{"phoneNumber":"09xxxxxxxxx","melliCode":"xxxxxxxxxx"}'
+```
+
+باید JSON برگردد (نه `Upstream timeout`).
 
 ```bash
 git pull
 npm run web:server
 ```
 
-لاگ Metro: `[sso-proxy] OTP+SMS https://auth.sabzevar.ir/api/auth/second-login/send-otp`
+لاگ Metro: `[sso-proxy] OTP+SMS http://...:5002/api/auth/second-login/send-otp`
