@@ -31,11 +31,18 @@ const configuredSsoApiUrl =
   'https://apiweb-loginsso.sabzevar.ir';
 
 /**
- * Web: same-origin proxy (/sso-api → apiweb-loginsso) to avoid browser CORS.
+ * Web: same-origin proxy (/sso-api → login API) for read/login flows.
  * Native: direct HTTPS to SSO API.
+ * OTP SMS is sent by auth.sabzevar.ir (mvc-web-sso), not from the client.
  */
 export const SSO_API_URL =
   Platform.OS === 'web' ? '/sso-api' : configuredSsoApiUrl;
+
+/** OTP+SMS via mvc-web-sso (auth.sabzevar.ir). Web uses Metro proxy to avoid CORS. */
+export const SSO_OTP_SEND_URL =
+  Platform.OS === 'web'
+    ? '/sso-otp-send'
+    : `${SSO_WEB_URL.replace(/\/$/, '')}/api/auth/second-login/send-otp`;
 
 /** @deprecated alias of SSO_API_URL */
 export const SSO_BASE_URL = SSO_API_URL;

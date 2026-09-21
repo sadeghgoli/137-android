@@ -1,4 +1,8 @@
-import { SSO_API_URL, SSO_CALLBACK_URL } from '../constants/apiConfig';
+import {
+  SSO_API_URL,
+  SSO_CALLBACK_URL,
+  SSO_OTP_SEND_URL,
+} from '../constants/apiConfig';
 
 export type ApiEnvelope<T> = {
   success: boolean;
@@ -42,14 +46,6 @@ function normalizeDigits(value: string): string {
     .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
     .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
     .replace(/\D/g, '');
-}
-
-function buildLoginSmsBody(otpCode: string): string {
-  return `کد ورود : ${otpCode}\nمدیریت فناوری اطلاعات شهرداری سبزوار`;
-}
-
-function generateOtpCode(): string {
-  return String(Math.floor(Math.random() * 100_000)).padStart(5, '0');
 }
 
 async function parseEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
@@ -183,25 +179,35 @@ export async function sendOtp(
   melliCode: string,
   phoneId?: number,
 ): Promise<{ message?: string }> {
-  const otpCode = generateOtpCode();
   const payload: Record<string, string | number> = {
     phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
     melliCode: normalizeDigits(melliCode),
-    otpCode,
-    smsBody: buildLoginSmsBody(otpCode),
   };
   if (phoneId && phoneId > 0) {
     payload.phoneId = phoneId;
-    payload.id = phoneId;
   }
 
-  const envelope = await ssoFetch<{ message?: string }>(
-    '/api/auth/second-login/send-otp',
-    {
+  let response: Response;
+  try {
+    response = await fetch(SSO_OTP_SEND_URL, {
       method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(payload),
-    },
-  );
+    });
+  } catch {
+    throw new SsoApiError(0, 'خطا در ارتباط با سرویس ارسال پیامک');
+  }
+
+  const envelope = await parseEnvelope<{ message?: string }>(response);
+  if (!response.ok || envelope.success === false) {
+    throw new SsoApiError(
+      response.status,
+      envelope.message?.trim() || 'ارسال کد تایید ناموفق بود',
+    );
+  }
 
   return {
     message: envelope.data?.message ?? envelope.message ?? 'کد تایید ارسال شد',

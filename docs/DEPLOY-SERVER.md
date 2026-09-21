@@ -80,23 +80,13 @@ npx expo export --platform web
 
 ## SMS OTP (وب test-137)
 
-کد OTP در UI پر **نمی‌شود**. بعد از `send-otp`، Metro از سرور ERP SMS می‌زند.
+ارسال پیامک فقط از **auth.sabzevar.ir** (mvc-web-sso / `OtpDeliveryService` + `Sms:Token`) انجام می‌شود؛ فرانت و Metro فقط درخواست `POST /sso-otp-send` را به همان API پورتال فوروارد می‌کنند.
 
-تنظیمات در **`server/sms.config.json`** (فقط Metro/Node می‌خواند — داخل APK نمی‌رود):
-
-```json
-{
-  "sendUrl": "http://192.168.1.30/SubSystems/SMS/webservices/sms_send.aspx",
-  "token": "...",
-  "hostHeader": "erp.sabzevar.ir"
-}
-```
-
-اختیاری: `server/sms.config.local.json` (gitignore) یا env برای override.
+روی سرور پورتال: `appsettings.json` → `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader` و دسترسی به `192.168.1.30`.
 
 ```bash
 git pull
 npm run web:server
 ```
 
-لاگ: `[sso-proxy] SMS ... (token: set)`
+لاگ Metro: `[sso-proxy] OTP+SMS https://auth.sabzevar.ir/api/auth/second-login/send-otp`
