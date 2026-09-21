@@ -15,10 +15,24 @@
 
 ## اجرای dev (پورت 5037)
 
+روی سرور **از `npm run web` استفاده نکنید** — مرورگر و DevTools Electron را باز می‌کند و با root خطا می‌دهد.
+
 ```bash
-cd /opt/137-android   # یا apps/android داخل clone
-BROWSER=none npx expo start --web --lan --port 5037 -c
+cd /opt/137-android
+npm run web:server
+# یا بعد از تغییر config:
+npm run web:server -- --clear
 ```
+
+| خطا | علت |
+|-----|-----|
+| `spawn xdg-open ENOENT` | Expo می‌خواهد مرورگر باز کند؛ روی سرور بدون GUI نیست |
+| `Running as root without --no-sandbox` | نصب React Native DevTools (Electron) با user root |
+| `--host 0.0.0.0` | در Expo نامعتبر است — از `--lan` استفاده کنید |
+
+**ترجیح:** با user غیر root اجرا کنید (`adduser` + `su - appuser`).
+
+متغیرها در `web:server`: `BROWSER=none` + `CI=1` (باز نکردن مرورگر / کمتر devtools).
 
 ---
 

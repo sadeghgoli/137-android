@@ -42,6 +42,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "web:server": "BROWSER=none CI=1 expo start --web --lan --port 5037",
     "sync:maplibre": "node scripts/sync-maplibre-assets.js",
     "build:apk": "eas build -p android --profile preview",
     "build:aab": "eas build -p android --profile production",
