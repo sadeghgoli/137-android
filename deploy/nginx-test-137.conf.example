@@ -9,7 +9,7 @@ server {
 
     # OTP + SMS via auth portal (same-origin — no browser CORS)
     location = /sso-otp-send {
-        proxy_pass https://auth.sabzevar.ir/api/auth/second-login/send-otp;
+        proxy_pass https://auth.sabzevar.ir/api/citizen/send-login-otp;
         proxy_http_version 1.1;
         proxy_set_header Host auth.sabzevar.ir;
         proxy_set_header X-Real-IP $remote_addr;

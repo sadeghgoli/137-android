@@ -45,7 +45,7 @@ export const SSO_API_URL =
 export const SSO_OTP_SEND_URL =
   Platform.OS === 'web'
     ? '/sso-otp-send'
-    : `${SSO_WEB_URL.replace(/\/$/, '')}/api/auth/second-login/send-otp`;
+    : `${SSO_WEB_URL.replace(/\/$/, '')}/api/citizen/send-login-otp`;
 
 /** @deprecated alias of SSO_API_URL */
 export const SSO_BASE_URL = SSO_API_URL;

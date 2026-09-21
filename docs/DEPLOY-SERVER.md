@@ -54,7 +54,7 @@ location /sso-api/ {
 
 # فقط برای dev لوکال (localhost) — روی test-137 مستقیم auth.sabzevar.ir + CORS
 location = /sso-otp-send {
-    proxy_pass https://auth.sabzevar.ir/api/auth/second-login/send-otp;
+    proxy_pass https://auth.sabzevar.ir/api/citizen/send-login-otp;
     proxy_http_version 1.1;
     proxy_set_header Host auth.sabzevar.ir;
     proxy_set_header X-Real-IP $remote_addr;
@@ -103,7 +103,7 @@ npx expo export --platform web
 ### ۱) پورتال (shahrdari-central-web)
 
 - `appsettings.json`: `Sms:Token`, `Sms:SendUrl`, `Sms:HostHeader`
-- API: `POST /api/auth/second-login/send-otp`
+- API: `POST /api/citizen/send-login-otp` (جدا از login API — جلوگیری از لوپ SMS)
 - Kestrel: پورت **5002** (همان ماشین یا IP LAN)
 
 ### ۲) Metro روی سرور 137
@@ -137,4 +137,4 @@ git pull
 npm run web:server
 ```
 
-لاگ Metro: `[sso-proxy] OTP+SMS http://...:5002/api/auth/second-login/send-otp`
+لاگ Metro: `[sso-proxy] OTP+SMS http://...:5002/api/citizen/send-login-otp`

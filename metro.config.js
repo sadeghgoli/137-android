@@ -33,7 +33,7 @@ const SSO_OTP_UPSTREAM_HOST_HEADER = (
   ''
 ).trim();
 
-const SSO_OTP_UPSTREAM_PATH = '/api/auth/second-login/send-otp';
+const SSO_OTP_UPSTREAM_PATH = '/api/citizen/send-login-otp';
 
 function resolveOtpUpstreamBase() {
   if (SSO_OTP_UPSTREAM_BASE) {
