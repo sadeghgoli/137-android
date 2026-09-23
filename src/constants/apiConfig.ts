@@ -33,7 +33,8 @@ const configuredSsoApiUrl =
 /**
  * Web: `/sso-api` → apiweb-loginsso (nginx/Metro).
  * Native: direct HTTPS to apiweb-loginsso.sabzevar.ir.
- * OTP: POST /api/auth/second-login/send-otp (same base as second-login / verify-otp).
+ * second-login and verify-otp use this base.
+ * OTP SMS: POST {SSO_WEB_URL}/api/citizen/send-login-otp (portal sends the SMS).
  */
 export const SSO_API_URL =
   Platform.OS === 'web' ? '/sso-api' : configuredSsoApiUrl;

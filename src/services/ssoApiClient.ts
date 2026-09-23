@@ -1,4 +1,8 @@
-import { SSO_API_URL, SSO_CALLBACK_URL } from '../constants/apiConfig';
+import {
+  SSO_API_URL,
+  SSO_CALLBACK_URL,
+  SSO_WEB_URL,
+} from '../constants/apiConfig';
 import {
   assertOtpCooldownAllowsSend,
   markOtpSent,
@@ -66,6 +70,7 @@ async function ssoFetch<T>(
   path: string,
   init: RequestInit = {},
   accessToken?: string | null,
+  baseUrl: string = SSO_API_URL,
 ): Promise<ApiEnvelope<T>> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -83,7 +88,7 @@ async function ssoFetch<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${SSO_API_URL}${path}`, {
+    response = await fetch(`${baseUrl}${path}`, {
       ...init,
       headers,
       signal: controller.signal,
@@ -193,10 +198,6 @@ export async function secondLogin(
 
 const otpSendInFlight = new Map<string, Promise<{ message?: string }>>();
 
-function generateOtpCode(): string {
-  return String(Math.floor(Math.random() * 100_000)).padStart(5, '0');
-}
-
 function otpInFlightKey(phoneNumber: string, melliCode: string): string {
   return `${normalizeDigits(melliCode)}:${normalizeDigits(phoneNumber)}`;
 }
@@ -228,17 +229,17 @@ async function sendOtpOnce(
 ): Promise<{ message?: string }> {
   await assertOtpCooldownAllowsSend(phoneNumber, melliCode);
 
-  const otpCode = generateOtpCode();
   const envelope = await ssoFetch<{ message?: string }>(
-    '/api/auth/second-login/send-otp',
+    '/api/citizen/send-login-otp',
     {
       method: 'POST',
       body: JSON.stringify({
         phoneNumber: normalizeDigits(phoneNumber) || phoneNumber.trim(),
         melliCode: normalizeDigits(melliCode),
-        otpCode,
       }),
     },
+    null,
+    SSO_WEB_URL,
   );
 
   await markOtpSent(phoneNumber, melliCode);

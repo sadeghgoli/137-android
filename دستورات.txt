@@ -1,0 +1,34 @@
+[Unit]
+Description=Sabzevar 137 Android Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/137-android
+
+Environment=NODE_ENV=production
+Environment=CI=1
+Environment=BROWSER=none
+Environment=ELECTRON_DISABLE_SANDBOX=1
+
+ExecStart=/usr/bin/npm run web:server -- --clear
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+
+2. فعال‌سازی
+systemctl daemon-reload
+systemctl enable 137-android.service
+systemctl start 137-android.service
+3. بررسی وضعیت
+systemctl status 137-android.service --no-pager
