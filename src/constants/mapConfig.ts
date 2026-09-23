@@ -1,7 +1,9 @@
 /** Sabzevar municipality MapLibre tile service */
 export const SABZEVAR_MAP = {
+  /** Reverse geocode still uses the login-geo API on port 7001. */
   baseUrl: 'https://geo.sabzevar.ir:7001',
-  styleUrl: 'https://geo.sabzevar.ir:7001/styles/style.json',
+  /** Same local style as the map project (public/style.json). */
+  styleUrl: '/style.json',
   tileApiKey: 'pk_OLH4n87ddaRXbkFXZM_hWn9hTeoKqhRn',
   /** Reverse geocode tap → street address */
   reverseGeocodePath: '/api/v1/geocoding/reverse',

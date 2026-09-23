@@ -11,6 +11,7 @@ import {
   MAPLIBRE_JS,
   MAPLIBRE_RTL_JS,
 } from '../../assets/maplibre/bundledAssets';
+import sabzevarStyle from '../../assets/map/sabzevarStyle.json';
 import { Colors } from '../../constants';
 import {
   SABZEVAR_MAP,
@@ -23,6 +24,9 @@ import type { HomeMapHandle, HomeMapProps, MapRegion } from './types';
 type MapLibreNS = typeof import('maplibre-gl');
 type MapInstance = InstanceType<MapLibreNS['Map']>;
 type MarkerInstance = InstanceType<MapLibreNS['Marker']>;
+type MapStyleSpec = NonNullable<
+  ConstructorParameters<MapLibreNS['Map']>[0]['style']
+>;
 
 declare global {
   interface Window {
@@ -156,7 +160,7 @@ export const HomeMap = forwardRef<HomeMapHandle, HomeMapProps>(
 
           const map = new maplibregl.Map({
             container: containerRef.current,
-            style: SABZEVAR_MAP.styleUrl,
+            style: sabzevarStyle as unknown as MapStyleSpec,
             center: [region.longitude, region.latitude],
             zoom: zoomFromLatitudeDelta(region.latitudeDelta),
             pitch: SABZEVAR_MAP.pitch,
@@ -167,7 +171,10 @@ export const HomeMap = forwardRef<HomeMapHandle, HomeMapProps>(
             maxZoom: SABZEVAR_MAP.maxZoom,
             minZoom: SABZEVAR_MAP.minZoom,
             transformRequest: (url: string, resourceType?: string) => {
-              if (resourceType === 'Tile') {
+              if (
+                resourceType === 'Tile' &&
+                !url.includes('geo.sabzevar.ir')
+              ) {
                 return { url: appendTileKey(url) };
               }
               return { url };

@@ -2,7 +2,6 @@ import React, {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,14 +16,13 @@ import {
   Map,
   Marker,
   NetworkManager,
-  TransformRequestManager,
   type CameraRef,
   type MapRef,
 } from '@maplibre/maplibre-react-native';
+import sabzevarStyle from '../../assets/map/sabzevarStyle.json';
 import { Colors } from '../../constants';
 import {
   SABZEVAR_MAP,
-  appendTileKey,
   zoomFromLatitudeDelta,
 } from '../../constants/mapConfig';
 import type { CitizenRequest } from '../../types/domain';
@@ -51,26 +49,12 @@ export const SabzevarMapNative = forwardRef<HomeMapHandle, HomeMapProps>(
     const [isLoading, setIsLoading] = useState(true);
     const [mapError, setMapError] = useState<string | null>(null);
 
-    const mapStyle = useMemo(
-      () => appendTileKey(SABZEVAR_MAP.styleUrl),
-      [],
-    );
-
     const initialZoom = zoomFromLatitudeDelta(
       initialRegionRef.current.latitudeDelta,
     );
 
     useEffect(() => {
       NetworkManager.setConnected(true);
-      const paramId = TransformRequestManager.addUrlSearchParam({
-        id: 'sabzevar-tile-key',
-        match: 'geo\\.sabzevar\\.ir',
-        name: 'key',
-        value: SABZEVAR_MAP.tileApiKey,
-      });
-      return () => {
-        TransformRequestManager.removeUrlSearchParam(paramId);
-      };
     }, []);
 
     useImperativeHandle(ref, () => ({
@@ -90,7 +74,9 @@ export const SabzevarMapNative = forwardRef<HomeMapHandle, HomeMapProps>(
         <Map
           ref={mapRef}
           style={styles.map}
-          mapStyle={mapStyle}
+          mapStyle={
+            sabzevarStyle as unknown as React.ComponentProps<typeof Map>['mapStyle']
+          }
           logo={false}
           attribution={false}
           compass={false}
